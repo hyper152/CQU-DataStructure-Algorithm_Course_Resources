@@ -2,6 +2,8 @@
 
 > 重庆大学2025级计算机科学与技术拔尖班 —— 《数据结构与算法》课程资源
 本仓库收录了本人在学习**数据结构与算法**课程时所完成的**笔记**、**作业**、**实验**等内容。
+
+参考
 [![GitHub](https://img.shields.io/badge/Reference-CQULeaf/DataStructure--Algorithm_Course_Resources-blue)](https://github.com/CQULeaf/DataStructure-Algorithm_Course_Resources)
 
 ---
