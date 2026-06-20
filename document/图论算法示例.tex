@@ -1,0 +1,635 @@
+% ============================================================
+% 图论算法示例 —— Dijkstra、BFS、并查集
+% 代码来自 sy4-4 天梯地图 / sy4-8 周游世界 / sy4-1 并查集
+% 编译方式: xelatex 图论算法示例.tex
+% ============================================================
+\documentclass[12pt,a4paper]{article}
+
+\usepackage{geometry}
+\geometry{left=2.0cm,right=2.0cm,top=2.0cm,bottom=2.0cm}
+
+\usepackage{ctex}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{hyperref}
+
+% ===== 代码样式（与 study/CS/hyper/ 一致）=====
+\lstset{
+    language=C++,
+    basicstyle=\small\ttfamily,
+    keywordstyle=\bfseries\color{blue!75!black},
+    commentstyle=\color{green!60!black},
+    stringstyle=\color{red!70!black},
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    numbersep=8pt,
+    frame=none,
+    breaklines=true,
+    tabsize=4,
+    showstringspaces=false,
+    extendedchars=true,
+    inputencoding=utf8,
+    aboveskip=6pt,
+    belowskip=6pt
+}
+
+\usepackage{titlesec}
+\titleformat{\section}{\Large\bfseries}{\thesection}{0.5em}{}
+\titleformat{\subsection}{\large\bfseries}{\thesubsection}{0.5em}{}
+
+\begin{document}
+
+\begin{center}
+    {\Huge\bfseries 图论算法示例}\\[0.3cm]
+    {\large 数据结构考试复习 --- Dijkstra / BFS / 并查集}\\[0.2cm]
+    {2026 年 6 月 18 日}
+\end{center}
+\vspace{0.3cm}
+
+\tableofcontents
+\newpage
+
+% ============================================================
+% 1  Dijkstra 算法
+% ============================================================
+\section{Dijkstra 算法（天梯地图）}
+
+\subsection{图的定义}
+
+\begin{lstlisting}
+#include <iostream>
+#include <vector>
+#include <climits>   // 用 INT_MAX 定义无穷大
+#include <algorithm> // 用 reverse 还原路径
+using namespace std;
+
+// 用一个足够大的数表示无穷大
+// 使用 INT_MAX/2 而不是 INT_MAX，防止 dist[u] + w 时溢出
+const int INF = INT_MAX / 2;
+
+// 边的结构体，表示图中的一条有向边
+struct Edge {
+    int to;          // 目标节点编号
+    int length;      // 道路长度（距离），单位千米
+    int time;        // 通过该道路所需时间，单位分钟
+};
+
+// 节点的结构体，表示图中的一个顶点
+struct Node {
+    vector<Edge> edges;  // 从该节点出发的所有有向边
+};
+\end{lstlisting}
+
+\subsection{Dijkstra 核心框架（双目标优化）}
+
+\begin{lstlisting}
+/**
+ * Dijkstra 求最快到达路线
+ * 主目标：时间最短
+ * 次目标：时间相同时选距离更短的
+ *
+ * @param n     节点总数
+ * @param start 起点编号
+ * @param end   终点编号
+ * @param graph 图的邻接表（vector<Node>）
+ * @return pair<路径向量, 总时间>
+ */
+pair<vector<int>, int> dijkstraTime(int n, int start, int end,
+                                    const vector<Node>& graph) {
+    // distTime[i]：起点到节点 i 的最短时间
+    vector<int> distTime(n, INF);
+    // distLen[i]：在最短时间条件下到节点 i 的最短距离（打破平局用）
+    vector<int> distLen(n, INF);
+    // parent[i]：节点 i 的前驱节点，用于最后还原完整路径
+    vector<int> parent(n, -1);
+    // visited[i]：标记节点 i 是否已确定最短路径
+    vector<bool> visited(n, false);
+
+    // 起点到自身的距离和时间均为 0
+    distTime[start] = 0;
+    distLen[start] = 0;
+
+    // 主循环：每次选出一个未访问且时间最小的节点
+    for (int i = 0; i < n; i++) {
+        // 在未访问节点中找 distTime 最小的
+        int u = -1;
+        int minTime = INF;
+        for (int j = 0; j < n; j++) {
+            if (!visited[j] && distTime[j] < minTime) {
+                minTime = distTime[j];
+                u = j;
+            }
+        }
+        // 如果所有剩余节点都不可达，提前结束
+        if (u == -1) break;
+        visited[u] = true;
+        // 已到达终点，可以提前退出
+        if (u == end) break;
+
+        // 松弛操作：用节点 u 更新其所有邻居的距离
+        for (const Edge& e : graph[u].edges) {
+            int v = e.to;
+            if (!visited[v]) {
+                // 情况1：找到更短的时间 → 直接更新
+                if (distTime[u] + e.time < distTime[v]) {
+                    distTime[v] = distTime[u] + e.time;
+                    distLen[v] = distLen[u] + e.length;
+                    parent[v] = u;  // 记录前驱
+                }
+                // 情况2：时间相同但距离更短 → 同样更新
+                else if (distTime[u] + e.time == distTime[v]
+                        && distLen[u] + e.length < distLen[v]) {
+                    distLen[v] = distLen[u] + e.length;
+                    parent[v] = u;
+                }
+            }
+        }
+    }
+
+    // 返回路径和总时间
+    return {getPath(parent, start, end), distTime[end]};
+}
+\end{lstlisting}
+
+\subsection{路径还原}
+
+\begin{lstlisting}
+/**
+ * 从 parent 数组还原完整路径
+ * parent[i] 记录节点 i 的前驱节点，从终点向前追溯到起点
+ */
+vector<int> getPath(const vector<int>& parent, int start, int end) {
+    vector<int> path;
+    int cur = end;
+    // 从终点开始，通过 parent 向前追溯直到起点
+    // parent[start] == -1（起点没有前驱）
+    while (cur != -1) {
+        path.push_back(cur);
+        cur = parent[cur];
+    }
+    // 上面得到的是从终点到起点的逆序，反转后得到正确顺序
+    reverse(path.begin(), path.end());
+    return path;
+}
+
+/**
+ * 格式化输出路径：start => v1 => v2 => ... => end
+ */
+void printPath(const vector<int>& path, int start, int end) {
+    cout << start;  // 先输出起点
+    // 依次输出路径上的后续节点，用" => "连接
+    for (int i = 1; i < path.size(); i++)
+        cout << " => " << path[i];
+}
+\end{lstlisting}
+
+\subsection{主函数与图的构建}
+
+\begin{lstlisting}
+int main() {
+    int n, m;  // n: 节点数, m: 边数
+    cin >> n >> m;
+
+    // 创建邻接表表示的图，共 n 个节点
+    vector<Node> graph(n);
+
+    // 读入 m 条边
+    for (int i = 0; i < m; i++) {
+        int v1, v2, oneway, length, time;
+        cin >> v1 >> v2 >> oneway >> length >> time;
+
+        // 正向边 v1 -> v2
+        Edge e1 = {v2, length, time};
+        graph[v1].edges.push_back(e1);
+
+        // oneway == 0 表示双向路，添加反向边 v2 -> v1
+        if (oneway == 0) {
+            Edge e2 = {v1, length, time};
+            graph[v2].edges.push_back(e2);
+        }
+        // oneway == 1 表示单行道，不添加反向边
+    }
+
+    int start, end;  // 查询的起点和终点
+    cin >> start >> end;
+
+    // 调用 Dijkstra 计算最快路线
+    auto [timePath, totalTime] =
+        dijkstraTime(n, start, end, graph);
+
+    // 输出结果
+    cout << "Time = " << totalTime << ": ";
+    printPath(timePath, start, end);
+    cout << endl;
+
+    return 0;
+}
+\end{lstlisting}
+
+\newpage
+
+% ============================================================
+% 2  BFS 广度优先搜索
+% ============================================================
+\section{BFS 广度优先搜索（周游世界）}
+
+\subsection{图的定义}
+
+\begin{lstlisting}
+#include <iostream>
+#include <vector>
+#include <queue>     // BFS 需要队列
+#include <algorithm> // 用 reverse 还原路径
+using namespace std;
+
+// 边的结构体
+struct Edge {
+    int to;          // 目标站点编号
+    int company;     // 这条边属于哪家公司（用于计算换乘）
+};
+\end{lstlisting}
+
+\subsection{BFS 求最少经停站（无权图最短路径）}
+
+\begin{lstlisting}
+/**
+ * BFS 求无权图中从 start 到各点的最少边数（经停站数）
+ * 核心思想：BFS 按层遍历，第一次访问到某节点时即为最短距离
+ *
+ * @param start 起点
+ * @param n     节点总数
+ * @param graph 邻接表
+ * @return dist 数组，dist[i] = 从 start 到 i 的最少边数，-1 表示不可达
+ */
+vector<int> bfsShortestPath(int start, int n,
+                            const vector<vector<Edge>>& graph) {
+    // dist[i] = -1 表示尚未访问（也即不可达）
+    vector<int> dist(n, -1);
+    queue<int> q;
+
+    // 起点到自身距离为 0
+    dist[start] = 0;
+    q.push(start);
+
+    // BFS 主循环：队列非空时持续处理
+    while (!q.empty()) {
+        int u = q.front();  // 取队首节点
+        q.pop();            // 队首出队
+
+        // 遍历节点 u 的所有邻居
+        for (const Edge& e : graph[u]) {
+            int v = e.to;
+            // 如果邻居 v 尚未访问，说明这是到 v 的最短路
+            if (dist[v] == -1) {
+                dist[v] = dist[u] + 1;  // 距离 = 前驱距离 + 1
+                q.push(v);              // v 入队，后续继续扩展
+            }
+        }
+    }
+    return dist;
+    // 查询结果：dist[end] 即为 start 到 end 的最少经停站数
+    // 若 dist[end] == -1，表示不可达
+}
+\end{lstlisting}
+
+\subsection{BFS 多条件（经停站最少 + 换乘最少）}
+
+\begin{lstlisting}
+/**
+ * PreNode 结构体：记录 BFS 路径上的前驱信息
+ * 用于在找到目标后还原完整路径，以及判断换乘
+ */
+struct PreNode {
+    int from;          // 前驱节点编号
+    int company;       // 从前驱节点到当前节点经过的公司
+    int transfers;     // 到当前节点为止的累计换乘次数
+};
+
+/**
+ * BFS 同时求最少经停站和最少换乘
+ * 优先保证经停站最少，经停站相同时取换乘最少的路径
+ */
+void bfsWithTransfer(int start, int target,
+                     const vector<vector<Edge>>& graph) {
+    int n = graph.size();
+
+    // dist[i]：从 start 到 i 的最少经停站数
+    vector<int> dist(n, -1);
+    // transfers[i]：在经停站最少的前提下，到 i 的最少换乘次数
+    vector<int> transfers(n, 1e9);
+    // pre[i]：在最优路径上 i 的前驱信息
+    vector<PreNode> pre(n, {-1, -1, 0});
+
+    queue<int> q;
+    dist[start] = 0;
+    transfers[start] = 0;
+    q.push(start);
+
+    while (!q.empty()) {
+        int u = q.front();
+        q.pop();
+
+        // 遍历 u 的所有邻居
+        for (const Edge& e : graph[u]) {
+            int v = e.to;
+            int comp = e.company;
+
+            // 计算到达 v 的新换乘次数
+            int newTransfers = transfers[u];
+            if (u != start) {
+                // 如果当前边的公司与前一站的公司不同，说明换乘了一次
+                if (pre[u].company != comp)
+                    newTransfers++;
+            }
+            // 注意：如果 u 是起点，第一段线路不算换乘
+
+            // 判断是否更新 v 的最优值：
+            // 条件1：v 尚未被访问过
+            // 条件2：找到了更少的经停站数
+            // 条件3：经停站数相同但换乘更少
+            if (dist[v] == -1 ||
+                dist[u] + 1 < dist[v] ||
+                (dist[u] + 1 == dist[v] && newTransfers < transfers[v])) {
+
+                dist[v] = dist[u] + 1;
+                transfers[v] = newTransfers;
+                pre[v] = {u, comp, transfers[v]};
+                q.push(v);
+            }
+        }
+    }
+
+    // 输出结果
+    if (dist[target] == -1) {
+        cout << "Sorry, no line is available." << endl;
+    } else {
+        // 最少经停站数（不含起点，dist 统计的是边数）
+        cout << dist[target] << endl;
+
+        // 回溯还原完整路径
+        vector<int> path;
+        int cur = target;
+        while (cur != -1) {
+            path.push_back(cur);
+            cur = pre[cur].from;
+        }
+        reverse(path.begin(), path.end());
+
+        // 输出路径全长（含起点和终点）
+        cout << "路径长度: " << path.size() << endl;
+    }
+}
+\end{lstlisting}
+
+\subsection{BFS 求连通分量}
+
+\begin{lstlisting}
+/**
+ * 从一个起点开始 BFS，标记所有可达节点
+ *
+ * @param start     起点
+ * @param adj       邻接表（无权图）
+ * @param visited   访问标记数组（传引用，会修改）
+ * @param traversal 存储遍历顺序（传引用）
+ */
+void bfs(int start, const vector<vector<int>>& adj,
+         vector<bool>& visited, vector<int>& traversal) {
+    queue<int> q;
+    q.push(start);
+    visited[start] = true;
+
+    while (!q.empty()) {
+        int u = q.front();
+        q.pop();
+        traversal.push_back(u);  // 记录遍历顺序
+
+        // 遍历所有邻接点
+        for (int v : adj[u]) {
+            if (!visited[v]) {
+                visited[v] = true;
+                q.push(v);
+            }
+        }
+    }
+}
+
+/**
+ * 对非连通图找所有连通分量
+ * 遍历每个节点，如果未访问就以它为起点做一次 BFS
+ */
+void findAllComponents(int n, const vector<vector<int>>& adj) {
+    vector<bool> visited(n, false);
+    vector<int> traversal;  // 按 BFS 顺序存储所有节点
+    int components = 0;     // 连通分量计数
+
+    for (int i = 0; i < n; i++) {
+        if (!visited[i]) {
+            bfs(i, adj, visited, traversal);
+            components++;  // 每次 BFS 发现一个新的连通分量
+        }
+    }
+
+    cout << "连通分量数: " << components << endl;
+    // traversal 中存储了 BFS 遍历序列
+}
+\end{lstlisting}
+
+\newpage
+
+% ============================================================
+% 3  并查集（Union-Find）
+% ============================================================
+\section{并查集（Union-Find / Disjoint Set Union）}
+
+\subsection{结构体实现（路径压缩 + 按秩合并）}
+
+\begin{lstlisting}
+#include <iostream>
+#include <vector>
+#include <algorithm>
+using namespace std;
+
+const int MAXN = 10000;
+
+/**
+ * UnionFind 并查集结构体
+ * 支持三种操作：
+ *   find(x)  —— 查找 x 所在集合的根节点
+ *   unite(x, y) —— 合并 x 和 y 所在的集合
+ *   same(x, y) —— 判断 x 和 y 是否属于同一集合
+ */
+struct UnionFind {
+    // parent[i]：节点 i 的父节点，根节点的父节点指向自身
+    vector<int> parent;
+    // rank[i]：以 i 为根的树的高度（近似），用于按秩合并优化
+    vector<int> rank;
+
+    /**
+     * 构造函数：初始化 n 个独立元素
+     * 每个元素的父节点指向自己，即每个元素自成一族
+     */
+    UnionFind(int n) {
+        parent.resize(n);
+        rank.resize(n, 0);
+        for (int i = 0; i < n; i++)
+            parent[i] = i;
+    }
+
+    /**
+     * 查找元素 x 所在集合的根节点
+     * 同时进行路径压缩：将路径上所有节点直接指向根节点
+     * 使得后续查找更快（近似 O(1)）
+     */
+    int find(int x) {
+        if (parent[x] != x)
+            parent[x] = find(parent[x]);  // 递归路径压缩
+        return parent[x];
+    }
+
+    /**
+     * 合并 x 和 y 所在的集合
+     * 按秩合并：将较矮的树挂在较高的树下，防止树退化成链表
+     */
+    void unite(int x, int y) {
+        int rx = find(x), ry = find(y);
+        if (rx == ry) return;  // 已经在同一集合，无需合并
+
+        // 按秩合并：rank 小的挂到 rank 大的下面
+        if (rank[rx] < rank[ry])
+            parent[rx] = ry;      // rx 的根指向 ry
+        else if (rank[rx] > rank[ry])
+            parent[ry] = rx;      // ry 的根指向 rx
+        else {
+            // rank 相等时，合并后 rank 增加 1
+            parent[ry] = rx;
+            rank[rx]++;
+        }
+    }
+
+    /**
+     * 判断 x 和 y 是否属于同一集合
+     * 根节点相同则在同一集合
+     */
+    bool same(int x, int y) {
+        return find(x) == find(y);
+    }
+};
+\end{lstlisting}
+
+\subsection{简化数组版（竞赛常用）}
+
+\begin{lstlisting}
+// 全局父节点数组，parent[i] 表示节点 i 的父节点
+int parent[MAXN];
+
+/**
+ * 初始化：每个元素自成一族
+ * 即每个元素的父节点指向自身
+ */
+void init(int n) {
+    for (int i = 0; i < n; i++)
+        parent[i] = i;
+}
+
+/**
+ * 查找根节点（路径压缩）
+ * 递归查找的同时压缩路径，使树保持扁平
+ */
+int find(int x) {
+    if (parent[x] != x)
+        parent[x] = find(parent[x]);
+    return parent[x];
+}
+
+/**
+ * 合并两个元素所在的集合
+ * 将 x 的根直接指向 y 的根（或反过来）
+ */
+void unite(int x, int y) {
+    int rx = find(x), ry = find(y);
+    if (rx != ry)
+        parent[ry] = rx;  // 将 ry 的根设为 rx
+}
+\end{lstlisting}
+
+\subsection{应用：统计连通分量}
+
+\begin{lstlisting}
+/**
+ * 统计当前图中的连通分量数
+ * 原理：根节点（parent[i] == i）的个数 == 连通分量数
+ */
+int countComponents(int n) {
+    int cnt = 0;
+    for (int i = 0; i < n; i++)
+        if (find(i) == i)  // 自己是根节点 → 一个分量
+            cnt++;
+    return cnt;
+}
+\end{lstlisting}
+
+\subsection{应用：按根节点分组}
+
+\begin{lstlisting}
+// 将所有元素按所属集合分组
+// 键：根节点编号，值：该组所有元素编号
+map<int, vector<int>> groups;
+for (int i = 0; i < n; i++) {
+    int root = uf.find(i);      // 找到 i 的根节点
+    groups[root].push_back(i);  // 将 i 加入对应组
+}
+
+// 遍历每个组，处理组内成员
+for (auto& entry : groups) {
+    int root = entry.first;            // 组标识（根节点）
+    vector<int>& members = entry.second;  // 组内所有成员
+    // 处理该组 ...
+}
+\end{lstlisting}
+
+\subsection{应用：朋友与敌人关系}
+
+\begin{lstlisting}
+/**
+ * 朋友关系 → 合并到同一集合
+ * 敌人关系 → 记录到对方的敌人列表中
+ * 查询时分别检查是否同集合、是否是敌人
+ */
+
+// enemy[i]：存储所有与 i 是敌人关系的节点
+vector<vector<int>> enemy(n + 1);
+// 并查集初始化
+vector<int> parent(n + 1);
+for (int i = 1; i <= n; i++) parent[i] = i;
+
+// 处理 m 对关系
+for (int i = 0; i < m; i++) {
+    int a, b, t;  // a 和 b 的关系类型为 t
+    cin >> a >> b >> t;
+    if (t == 1) {
+        unite(a, b);           // 朋友 → 合并到同一集合
+    }
+    if (t == -1) {
+        enemy[a].push_back(b); // 敌人 → 互相记录
+        enemy[b].push_back(a);
+    }
+}
+
+// 查询 a 和 b 的关系
+bool isFriend = same(a, b);     // 同一集合内是朋友
+// 在 a 的敌人列表中找 b
+bool isEnemy = find(enemy[a].begin(), enemy[a].end(), b)
+               != enemy[a].end();
+
+if (isFriend && !isEnemy)    cout << "No problem" << endl;
+else if (isFriend && isEnemy) cout << "OK but..." << endl;
+else if (!isFriend && isEnemy) cout << "No way" << endl;
+else                          cout << "OK" << endl;
+\end{lstlisting}
+
+\vfill
+\begin{flushright}
+\small —— 祝考试顺利！——
+\end{flushright}
+
+\end{document}
