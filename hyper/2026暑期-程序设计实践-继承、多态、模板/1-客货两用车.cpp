@@ -1,3 +1,7 @@
+#include <iostream>
+using namespace std;
+
+/* 你提交的代码将被嵌在这里 */
 class CAR {
 protected:
     double speed;
@@ -55,3 +59,15 @@ public:
         cout << "客货两用车: " << speed << "公里/小时, " << seat << "人, " << load << "吨" << endl;
     }
 };
+/* 你提交的代码将被嵌在这里 */
+
+int main()
+{
+    CAR *p;
+    double s, t, w;
+    cin >> s, t, w;
+    p = new VAN(s, t, w);
+    p->Show();
+    delete p;
+    return 0;
+}

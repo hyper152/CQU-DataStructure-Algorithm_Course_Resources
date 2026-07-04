@@ -1,3 +1,8 @@
+#include <iostream>
+#include <iomanip>
+using namespace std;
+
+/* 你提交的代码将被嵌在这里 */
 class TIME {
 private:
     int hour, minute, second;
@@ -78,3 +83,19 @@ public:
         return !(*this == t);
     }
 };
+/* 你提交的代码将被嵌在这里 */
+
+int main()
+{
+    TIME a, b;
+    cin >> a >> b;
+    if (a > b)
+    {
+        cout << "Yes\n";
+    }
+    else
+    {
+        cout << "No\n";
+    }
+    return 0;
+}
